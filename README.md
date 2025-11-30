@@ -1,8 +1,5 @@
 # Hunyadi
-A UCI compliant Chess engine
-
-Has a tendency to make illegal moves on faster time controls however mostly stable at around 5 minutes / 40 moves  
-Elo also declines sharply at faster time controls  
+A UCI compliant Chess engine  
 Estimated elo at around 1200-1400 (5 minutes / 40 moves)  
 
 Features:  
