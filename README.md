@@ -2,6 +2,8 @@
 A UCI compliant Chess engine  
 Estimated elo at around 1200-1400 (5 minutes / 40 moves)  
 
+Unstable at Fast time controls  
+
 Features:  
 
 Language & Protocol: C++17, UCI-compliant  
