@@ -14,6 +14,7 @@
 #include <cctype>
 #include <climits>
 #include <atomic>
+#include <thread>
 
 namespace fs = std::filesystem;
 
@@ -292,8 +293,14 @@ public:
         stateStack_.clear();
     }
     
-    void setFen(const std::string& fen) {
-        reset();
+	void setFen(const std::string& fen) {
+		reset();
+		
+		for (int c = 0; c < 2; ++c) {
+			for (int p = 0; p < 6; ++p) {
+				pieces_[c][p] = 0;
+			}
+		}
         std::istringstream iss(fen);
         std::string boardPart, colorPart, castlingPart, epPart;
         iss >> boardPart >> colorPart >> castlingPart >> epPart;
@@ -391,7 +398,6 @@ public:
     }
     
     bool isInsufficientMaterial() const {
-        // K vs K
         if (__builtin_popcountll(occupied_) == 2) return true;
         
         uint64_t whitePieces = pieces_[0][0] | pieces_[0][1] | pieces_[0][2] | pieces_[0][3] | pieces_[0][4];
@@ -1104,7 +1110,7 @@ struct SearchStats {
         if (stopSearch.load(std::memory_order_relaxed)) return true;
         if (maxTimeMs == INT64_MAX) return false;
         
-        if (((nodes + qNodes) & 0x7FF) != 0) return false;
+        if (((nodes + qNodes) & 0x7F) != 0) return false;
         
         if (timeMs() >= maxTimeMs) {
             stopSearch.store(true, std::memory_order_relaxed);
@@ -1177,6 +1183,8 @@ private:
     }
     
     std::vector<Move> orderMoves(const std::vector<Move>& moves, Depth ply, uint64_t hash) const {
+		if (stats.stopSearch.load(std::memory_order_relaxed)) return {};
+		 
         std::vector<std::pair<int, Move>> scored;
         scored.reserve(moves.size());
         for (const auto& move : moves) {
@@ -1195,7 +1203,6 @@ private:
         stats.addNode(true);
 		stats.seldepth = std::max(stats.seldepth, ply); 
         
-        // Check time frequently
         if (stats.checkTime()) return alpha;
         
         bool inCheck = board.isInCheck(board.turn());
@@ -1232,7 +1239,7 @@ private:
         
         if (depth <= 0) return {quiescence(alpha, beta, ply), std::nullopt};
 		bool inCheck = board.isInCheck(board.turn());
-		if (inCheck) depth++;  // Extend by 1 ply
+		if (inCheck) depth++;
         
         uint64_t hash = board.computeHash();
         
@@ -1339,6 +1346,10 @@ public:
         for (auto& row : history_) row.fill(0);
     }
 	
+	void stop() {
+		stats.stopSearch.store(true, std::memory_order_relaxed);
+	}
+	
 	int hashfull() const {
 		int used = 0;
 		const int sampleSize = std::min<int>(tt.size(), 1000);
@@ -1418,10 +1429,12 @@ private:
     int64_t wtime = 0, btime = 0;
     int64_t winc = 0, binc = 0; 
     int movestogo = 0;
+    std::thread searchThread;
+    std::atomic<bool> searchInProgress{false};
     
     void handleUci() {
-        std::cout << "id name Hunyadi 1.0\n";
-        std::cout << "id author CiganySalesman\n";
+        std::cout << "id name Hunyadi 1.1\n";
+        std::cout << "id author ThatHungarian\n";
         std::cout << "option name BookFile type string default book.bin\n";
         std::cout << "option name MaxDepth type spin default 20 min 1 max 30\n";
         std::cout << "uciok" << std::endl;
@@ -1541,56 +1554,70 @@ private:
         }
     }
     
-    void handleGo(std::istringstream& iss) {
-        std::string token;
-        int64_t moveTime = -1; 
-        
-        wtime = 0; btime = 0;
-        winc = 0; binc = 0;
-        movestogo = 0;
-        
-        while (iss >> token) {
-            if (token == "depth") {
-                iss >> maxDepth;
-            } else if (token == "movetime") {
-                iss >> moveTime;
-            } else if (token == "infinite") {
-                moveTime = INT64_MAX;
-            } else if (token == "wtime") {
-                iss >> wtime;
-            } else if (token == "btime") {
-                iss >> btime;
-            } else if (token == "winc") {
-                iss >> winc;
-            } else if (token == "binc") {
-                iss >> binc;
-            } else if (token == "movestogo") {
-                iss >> movestogo;
-            }
-        }
-        
-        if (moveTime == -1) {
-            moveTime = calculateMoveTime();
-            std::cerr << "info string Time left: " << (board.turn() == Color::WHITE ? wtime : btime) 
-                      << "ms, Moves remaining: " << (movestogo ? movestogo : (board.popcount() > 20 ? 30 : 10))
-                      << ", Allocated: " << moveTime << "ms" << std::endl;
-        }
-        
-        auto bookMove = book.getMove(board);
-        if (bookMove) {
-            std::cout << "bestmove " << bookMove->toUci() << std::endl;
-            return;
-        }
-        
-        auto [bestMove, finalDepth] = searcher.iterativeDeepening(maxDepth, moveTime);
-        if (bestMove) {
-            std::cout << "bestmove " << bestMove->toUci() << std::endl;
-        } else {
-            auto moves = board.generateMoves();
-            if (!moves.empty()) std::cout << "bestmove " << moves[0].toUci() << std::endl;
-            else std::cout << "bestmove 0000" << std::endl;
+void handleGo(std::istringstream& iss) {
+    std::string token;
+    int64_t moveTime = -1; 
+    
+    wtime = 0; btime = 0;
+    winc = 0; binc = 0;
+    movestogo = 0;
+    
+    while (iss >> token) {
+        if (token == "depth") {
+            iss >> maxDepth;
+        } else if (token == "movetime") {
+            iss >> moveTime;
+        } else if (token == "infinite") {
+            moveTime = INT64_MAX;
+        } else if (token == "wtime") {
+            iss >> wtime;
+        } else if (token == "btime") {
+            iss >> btime;
+        } else if (token == "winc") {
+            iss >> winc;
+        } else if (token == "binc") {
+            iss >> binc;
+        } else if (token == "movestogo") {
+            iss >> movestogo;
         }
     }
+    
+    if (moveTime == -1) {
+        moveTime = calculateMoveTime();
+        std::cerr << "info string Time left: " << (board.turn() == Color::WHITE ? wtime : btime) 
+                  << "ms, Moves remaining: " << (movestogo ? movestogo : (board.popcount() > 20 ? 30 : 10))
+                  << ", Allocated: " << moveTime << "ms" << std::endl;
+    }
+
+    if (searchThread.joinable()) {
+        searcher.stop();
+        searchThread.join();
+    }
+    
+    searchInProgress = true;
+
+    searchThread = std::thread([this, moveTime]() {
+        try {
+            auto bookMove = book.getMove(board);
+            if (bookMove) {
+                std::cout << "bestmove " << bookMove->toUci() << std::endl;
+            } else {
+                auto [bestMove, finalDepth] = searcher.iterativeDeepening(maxDepth, moveTime);
+                if (bestMove) {
+                    std::cout << "bestmove " << bestMove->toUci() << std::endl;
+                } else {
+                    auto moves = board.generateMoves();
+                    if (!moves.empty()) std::cout << "bestmove " << moves[0].toUci() << std::endl;
+                    else std::cout << "bestmove 0000" << std::endl;
+                }
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "info string Search exception: " << e.what() << std::endl;
+            std::cout << "bestmove 0000" << std::endl;
+        }
+        searchInProgress = false;
+    });
+}
     
     void handleSetOption(std::istringstream& iss) {
         std::string token, name, value;
@@ -1615,8 +1642,24 @@ public:
             else if (cmd == "position") handlePosition(iss);
             else if (cmd == "go") handleGo(iss);
             else if (cmd == "setoption") handleSetOption(iss);
-            else if (cmd == "quit") break;
-            
+			else if (cmd == "stop") {
+				if (searchInProgress) {
+					searcher.stop();
+					if (searchThread.joinable()) {
+						searchThread.join();
+					}
+					searchInProgress = false;
+				}
+			}
+			else if (cmd == "quit") {
+				if (searchInProgress) {
+					searcher.stop();
+					if (searchThread.joinable()) {
+						searchThread.join();
+					}
+				}
+				break;
+			}
             std::cout.flush();
         }
     }
