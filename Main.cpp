@@ -356,21 +356,21 @@ public:
         return pieces_[static_cast<int>(color)][static_cast<int>(type)];
     }
     
-    uint64_t computeHash() const {
-        uint64_t hash = 0x9e3779b97f4a7c15ULL;
-        for (int c = 0; c < 2; ++c) {
-            for (int p = 0; p < 6; ++p) {
-                uint64_t bb = pieces_[c][p];
-                while (bb) {
-                    int sq = lsbIndex(bb);
-                    hash ^= (c * 6ULL + p + 1) * 0x123456789abcdef0ULL ^ (sq * 0xbf58476d1ce4e5b9ULL);
-                    bb &= bb - 1;
-                }
-            }
-        }
-        hash ^= static_cast<uint64_t>(sideToMove_) * 0xabcdef0123456789ULL;
-        return hash;
-    }
+	uint64_t computeHash() const {
+		uint64_t hash = 0x9e3779b97f4a7c15ULL;
+		for (int c = 0; c < 2; ++c) {
+			for (int p = 0; p < 6; ++p) {
+				uint64_t bb = pieces_[c][p];
+				while (bb) {
+					int sq = lsbIndex(bb);
+					hash ^= (c * 6ULL + p + 1) * 0x123456789abcdef0ULL ^ (sq * 0xbf58476d1ce4e5b9ULL);
+					bb &= bb - 1;
+				}
+			}
+		}
+		hash ^= static_cast<uint64_t>(sideToMove_) * 0xabcdef0123456789ULL;
+		return hash;
+	}
     
     Piece pieceAt(Square sq) const {
         if (sq == Square::NONE) return {PieceType::NONE, Color::NONE};
@@ -425,93 +425,102 @@ public:
         return isCheckmate() || isStalemate() || isInsufficientMaterial();
     }
     
-    void makeMove(const Move& move) {
-        BoardState state;
-        memcpy(state.pieces, pieces_, sizeof(pieces_));
-        state.occupied = occupied_;
-        state.empty = empty_;
-        state.sideToMove = sideToMove_;
-        state.enPassant = enPassant_;
-        memcpy(state.castlingRights, castlingRights_, sizeof(castlingRights_));
-        state.halfmoveClock = halfmoveClock_;
-        state.fullmoveNumber = fullmoveNumber_;
-        stateStack_.push_back(state);
-        
-        int from = static_cast<int>(move.from);
-        int to = static_cast<int>(move.to);
-        Color us = sideToMove_;
-        Color them = (us == Color::WHITE) ? Color::BLACK : Color::WHITE;
-        
-        Piece moved = pieceAt(move.from);
-        Piece captured = pieceAt(move.to);
-        
-        uint64_t fromMask = 1ULL << from;
-        uint64_t toMask = 1ULL << to;
-        pieces_[static_cast<int>(us)][static_cast<int>(moved.type)] &= ~fromMask;
-        pieces_[static_cast<int>(us)][static_cast<int>(moved.type)] |= toMask;
-        
-        if (captured.type != PieceType::NONE) {
-            pieces_[static_cast<int>(them)][static_cast<int>(captured.type)] &= ~toMask;
-        }
-        
-        if (moved.type == PieceType::PAWN) {
-            if (std::abs(to - from) == 16) {
-                enPassant_ = static_cast<Square>((from + to) / 2);
-            }
-            
-            if (move.to == enPassant_) {
-                int epPawn = (us == Color::WHITE) ? to - 8 : to + 8;
-                pieces_[static_cast<int>(them)][0] &= ~(1ULL << epPawn);
-            }
-            
-            if (move.promotion != PieceType::NONE) {
-                pieces_[static_cast<int>(us)][0] &= ~toMask;
-                pieces_[static_cast<int>(us)][static_cast<int>(move.promotion)] |= toMask;
-            }
-        }
-        
-        if (moved.type == PieceType::KING) {
-            castlingRights_[static_cast<int>(us)][0] = false;
-            castlingRights_[static_cast<int>(us)][1] = false;
-            
-            if (std::abs(to - from) == 2 && from % 8 == 4) {
-                bool kingSide = to > from;
-                int rookFrom = kingSide ? from + 3 : from - 4;
-                int rookTo = kingSide ? from + 1 : from - 1;
-                
-                uint64_t rookToMask = 1ULL << rookTo;
-                for (int c = 0; c < 2; ++c) {
-                    for (int p = 0; p < 6; ++p) {
-                        pieces_[c][p] &= ~rookToMask;
-                    }
-                }
-                
-                pieces_[static_cast<int>(us)][3] &= ~(1ULL << rookFrom);
-                pieces_[static_cast<int>(us)][3] |= rookToMask;
-            }
-        }
-        
-        if (moved.type == PieceType::ROOK) {
-            if (from == 0 || from == 56) castlingRights_[static_cast<int>(us)][1] = false;
-            if (from == 7 || from == 63) castlingRights_[static_cast<int>(us)][0] = false;
-        }
-        
-        if (moved.type != PieceType::PAWN || std::abs(to - from) != 16) {
-            enPassant_ = Square::NONE;
-        }
-        
-        updateBitboards();
-        sideToMove_ = them;
-        moveStack_.push_back(move);
-        
-        if (moved.type == PieceType::PAWN || captured.type != PieceType::NONE) {
-            halfmoveClock_ = 0;
-        } else {
-            ++halfmoveClock_;
-        }
-        
-        if (us == Color::BLACK) ++fullmoveNumber_;
-    }
+	void makeMove(const Move& move) {
+		BoardState state;
+		memcpy(state.pieces, pieces_, sizeof(pieces_));
+		state.occupied = occupied_;
+		state.empty = empty_;
+		state.sideToMove = sideToMove_;
+		state.enPassant = enPassant_;
+		memcpy(state.castlingRights, castlingRights_, sizeof(castlingRights_));
+		state.halfmoveClock = halfmoveClock_;
+		state.fullmoveNumber = fullmoveNumber_;
+		stateStack_.push_back(state);
+		
+		Piece captured = pieceAt(move.to);
+		if (captured.type == PieceType::ROOK) {
+			if (move.to == Square::A1 || move.to == Square::A8) 
+				castlingRights_[static_cast<int>(captured.color)][1] = false;
+			if (move.to == Square::H1 || move.to == Square::H8) 
+				castlingRights_[static_cast<int>(captured.color)][0] = false;
+		}
+		
+		int from = static_cast<int>(move.from);
+		int to = static_cast<int>(move.to);
+		Color us = sideToMove_;
+		Color them = (us == Color::WHITE) ? Color::BLACK : Color::WHITE;
+		
+		Piece moved = pieceAt(move.from);
+		
+		uint64_t fromMask = 1ULL << from;
+		uint64_t toMask = 1ULL << to;
+		
+		for (int c = 0; c < 2; ++c) {
+			for (int p = 0; p < 6; ++p) {
+				pieces_[c][p] &= ~fromMask;
+				pieces_[c][p] &= ~toMask;
+			}
+		}
+		
+		pieces_[static_cast<int>(us)][static_cast<int>(moved.type)] |= toMask;
+		
+		if (moved.type == PieceType::PAWN && move.to == enPassant_) {
+			int epPawn = (us == Color::WHITE) ? to - 8 : to + 8;
+			uint64_t epMask = 1ULL << epPawn;
+			for (int c = 0; c < 2; ++c) {
+				for (int p = 0; p < 6; ++p) {
+					pieces_[c][p] &= ~epMask;
+				}
+			}
+		}
+		
+		if (move.promotion != PieceType::NONE) {
+			pieces_[static_cast<int>(us)][static_cast<int>(moved.type)] &= ~toMask;
+			pieces_[static_cast<int>(us)][static_cast<int>(move.promotion)] |= toMask;
+		}
+		
+		if (moved.type == PieceType::KING && std::abs(to - from) == 2) {
+			bool kingSide = to > from;
+			int rookFrom = kingSide ? from + 3 : from - 4;
+			int rookTo = kingSide ? from + 1 : from - 1;
+			uint64_t rookFromMask = 1ULL << rookFrom;
+			uint64_t rookToMask = 1ULL << rookTo;
+			for (int c = 0; c < 2; ++c) {
+				for (int p = 0; p < 6; ++p) {
+					pieces_[c][p] &= ~rookFromMask;
+					pieces_[c][p] &= ~rookToMask;
+				}
+			}
+			pieces_[static_cast<int>(us)][static_cast<int>(PieceType::ROOK)] |= rookToMask;
+		}
+		
+		if (moved.type == PieceType::KING) {
+			castlingRights_[static_cast<int>(us)][0] = false;
+			castlingRights_[static_cast<int>(us)][1] = false;
+		}
+		if (moved.type == PieceType::ROOK) {
+			if (from == 0 || from == 56) castlingRights_[static_cast<int>(us)][1] = false;
+			if (from == 7 || from == 63) castlingRights_[static_cast<int>(us)][0] = false;
+		}
+		
+		if (moved.type == PieceType::PAWN && std::abs(to - from) == 16) {
+			enPassant_ = static_cast<Square>((from + to) / 2);
+		} else {
+			enPassant_ = Square::NONE;
+		}
+		
+		updateBitboards();
+		sideToMove_ = them;
+		moveStack_.push_back(move);
+		
+		if (moved.type == PieceType::PAWN || captured.type != PieceType::NONE) {
+			halfmoveClock_ = 0;
+		} else {
+			++halfmoveClock_;
+		}
+		
+		if (us == Color::BLACK) ++fullmoveNumber_;
+	}
     
     void unmakeMove() {
         if (!stateStack_.empty() && !moveStack_.empty()) {
@@ -733,6 +742,7 @@ public:
         int backRank = (us == Color::WHITE) ? 0 : 7;
         
         if (castlingRights_[static_cast<int>(us)][0] && kingSq == backRank * 8 + 4 &&
+			!isInCheck(us) &&
             !(occ & (1ULL << (kingSq + 1))) && !(occ & (1ULL << (kingSq + 2))) &&
             !isSquareAttacked(static_cast<Square>(kingSq + 1), them) &&
             !isSquareAttacked(static_cast<Square>(kingSq + 2), them)) {
@@ -740,6 +750,7 @@ public:
         }
         
         if (castlingRights_[static_cast<int>(us)][1] && kingSq == backRank * 8 + 4 &&
+			!isInCheck(us) &&
             !(occ & (1ULL << (kingSq - 1))) && !(occ & (1ULL << (kingSq - 2))) &&
             !(occ & (1ULL << (kingSq - 3))) &&
             !isSquareAttacked(static_cast<Square>(kingSq - 1), them) &&
@@ -880,9 +891,9 @@ public:
 
 // Evaluation
 using Score = int;
-constexpr Score CENTER_BONUS = 20;
 constexpr Score BISHOP_PAIR_BONUS = 30;
-constexpr Score ROOK_OPEN_FILE_BONUS = 25;
+constexpr Score CENTER_BONUS = 0; // Now handled by PSTs
+constexpr Score ROOK_OPEN_FILE_BONUS = 0; // Now handled by PSTs
 constexpr Score DOUBLED_PAWN_PENALTY = 15;
 constexpr Score ISOLATED_PAWN_PENALTY = 20;
 
@@ -899,6 +910,76 @@ struct Evaluator {
         -5, -5, -5, -15,-15, -5, -5, -5,
          0,  0,  0,  0,  0,  0,  0,  0
     };
+    
+    const std::array<int, 64> knightTable = {
+        -50,-40,-30,-30,-30,-30,-40,-50,
+        -40,-20,  0,  5,  5,  0,-20,-40,
+        -30,  0, 10, 15, 15, 10,  0,-30,
+        -30,  5, 15, 20, 20, 15,  5,-30,
+        -30,  5, 15, 20, 20, 15,  5,-30,
+        -30,  0, 10, 15, 15, 10,  0,-30,
+        -40,-20,  0,  5,  5,  0,-20,-40,
+        -50,-40,-30,-30,-30,-30,-40,-50
+    };
+    
+    const std::array<int, 64> bishopTable = {
+        -20,-10,-10,-10,-10,-10,-10,-20,
+        -10,  5,  0,  0,  0,  0,  5,-10,
+        -10, 10, 10, 10, 10, 10, 10,-10,
+        -10,  0, 10, 10, 10, 10,  0,-10,
+        -10,  5,  5, 10, 10,  5,  5,-10,
+        -10,  0,  5, 10, 10,  5,  0,-10,
+        -10,  0,  0,  0,  0,  0,  0,-10,
+        -20,-10,-10,-10,-10,-10,-10,-20
+    };
+    
+    const std::array<int, 64> rookTable = {
+         0,  0,  0,  5,  5,  0,  0,  0,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+        -5,  0,  0,  0,  0,  0,  0, -5,
+         5, 10, 10, 10, 10, 10, 10,  5,
+         0,  0,  0,  0,  0,  0,  0,  0
+    };
+    
+    const std::array<int, 64> queenTable = {
+        -20,-10,-10, -5, -5,-10,-10,-20,
+        -10,  0,  5,  0,  0,  5,  0,-10,
+        -10,  5,  5,  5,  5,  5,  5,-10,
+          0,  0,  5,  5,  5,  5,  0, -5,
+         -5,  0,  5,  5,  5,  5,  0, -5,
+        -10,  0,  5,  5,  5,  5,  0,-10,
+        -10,  0,  0,  0,  0,  0,  0,-10,
+        -20,-10,-10, -5, -5,-10,-10,-20
+    };
+    
+    const std::array<int, 64> kingTableMidgame = {
+        20, 30, 10,  0,  0, 10, 30, 20,
+        20, 20,  0,  0,  0,  0, 20, 20,
+        -10,-20,-20,-20,-20,-20,-20,-10,
+        -20,-30,-30,-40,-40,-30,-30,-20,
+        -30,-40,-40,-50,-50,-40,-40,-30,
+        -30,-40,-40,-50,-50,-40,-40,-30,
+        -30,-40,-40,-50,-50,-40,-40,-30,
+        -30,-40,-40,-50,-50,-40,-40,-30
+    };
+    
+    inline int getPstValue(Square sq, PieceType pt, Color c) const {
+        int index = static_cast<int>(sq);
+        if (c == Color::BLACK) index = 63 - index;
+        
+        switch (pt) {
+            case PieceType::PAWN:   return pawnTable[index];
+            case PieceType::KNIGHT: return knightTable[index];
+            case PieceType::BISHOP: return bishopTable[index];
+            case PieceType::ROOK:   return rookTable[index];
+            case PieceType::QUEEN:  return queenTable[index];
+            case PieceType::KING:   return kingTableMidgame[index];
+            default: return 0;
+        }
+    }
     
     bool isPassedPawn(const Board& board, Square sq, Color color) const {
         int rank = static_cast<int>(sq) / 8;
@@ -952,55 +1033,13 @@ struct Evaluator {
         return safety;
     }
     
-    int evaluateMobility(const Board& board, Color color) const {
-        int mobility = 0;
-        Color them = (color == Color::WHITE) ? Color::BLACK : Color::WHITE;
-        uint64_t occ = board.occupied();
-        uint64_t enemy = 0;
-        for (int p = 0; p < 6; ++p) enemy |= board.getBitboard(static_cast<PieceType>(p), them);
-        
-        uint64_t knights = board.getBitboard(PieceType::KNIGHT, color);
-        while (knights) {
-            int sq = lsbIndex(knights);
-            knights &= knights - 1;
-            uint64_t moves = Attacks::knightAttacks(static_cast<Square>(sq));
-            mobility += popcount(moves & ~occ);
-        }
-        
-        uint64_t bishops = board.getBitboard(PieceType::BISHOP, color);
-        while (bishops) {
-            int sq = lsbIndex(bishops);
-            bishops &= bishops - 1;
-            uint64_t moves = Attacks::bishopAttacks(static_cast<Square>(sq), occ);
-            mobility += popcount(moves & ~occ);
-        }
-        
-        uint64_t rooks = board.getBitboard(PieceType::ROOK, color);
-        while (rooks) {
-            int sq = lsbIndex(rooks);
-            rooks &= rooks - 1;
-            uint64_t moves = Attacks::rookAttacks(static_cast<Square>(sq), occ);
-            mobility += popcount(moves & ~occ);
-        }
-        
-        uint64_t queens = board.getBitboard(PieceType::QUEEN, color);
-        while (queens) {
-            int sq = lsbIndex(queens);
-            queens &= queens - 1;
-            uint64_t moves = Attacks::queenAttacks(static_cast<Square>(sq), occ);
-            mobility += popcount(moves & ~occ);
-        }
-        
-        return mobility;
-    }
-    
     Score evaluate(const Board& board) const {
         Score score = 0;
-        const std::array<Square, 4> center = {Square::D4, Square::E4, Square::D5, Square::E5};
         
         for (int c = 0; c < 2; ++c) {
-            if (popcount(board.getBitboard(PieceType::BISHOP, static_cast<Color>(c))) >= 2) {
-                score += (c == 0 ? BISHOP_PAIR_BONUS : -BISHOP_PAIR_BONUS);
+            Color color = static_cast<Color>(c);
+            if (popcount(board.getBitboard(PieceType::BISHOP, color)) >= 2) {
+                score += (color == Color::WHITE ? BISHOP_PAIR_BONUS : -BISHOP_PAIR_BONUS);
             }
         }
         
@@ -1008,46 +1047,12 @@ struct Evaluator {
             if (piece.type == PieceType::NONE) continue;
             
             Score value = pieceValues[static_cast<int>(piece.type)];
-            int file = static_cast<int>(sq) % 8;
-            int rank = static_cast<int>(sq) / 8;
+            value += getPstValue(sq, piece.type, piece.color);
             
-            if (std::find(center.begin(), center.end(), sq) != center.end()) {
-                value += CENTER_BONUS;
-            }
-            
-            if (piece.type == PieceType::PAWN) {
-                int tableValue = pawnTable[static_cast<int>(sq)];
-                if (piece.color == Color::BLACK) {
-                    tableValue = pawnTable[63 - static_cast<int>(sq)];
-                    tableValue = -tableValue;
-                }
-                value += tableValue;
-                
-                if (isPassedPawn(board, sq, piece.color)) {
-                    int bonus = (piece.color == Color::WHITE) ? 
-                                ((rank - 1) * 20) : ((6 - rank) * 20);
-                    value += bonus;
-                }
-                
-                uint64_t fileMask = 0x0101010101010101ULL << file;
-                if (popcount(board.getBitboard(PieceType::PAWN, piece.color) & fileMask) > 1) {
-                    value -= DOUBLED_PAWN_PENALTY;
-                }
-                
-                uint64_t adjacentFiles = 0;
-                if (file > 0) adjacentFiles |= (0x0101010101010101ULL << (file-1));
-                if (file < 7) adjacentFiles |= (0x0101010101010101ULL << (file+1));
-                
-                if ((board.getBitboard(PieceType::PAWN, piece.color) & adjacentFiles) == 0) {
-                    value -= ISOLATED_PAWN_PENALTY;
-                }
-            }
-            
-            if (piece.type == PieceType::ROOK) {
-                uint64_t fileMask = 0x0101010101010101ULL << file;
-                if ((board.getBitboard(PieceType::PAWN, piece.color) & fileMask) == 0) {
-                    value += ROOK_OPEN_FILE_BONUS;
-                }
+            if (piece.type == PieceType::PAWN && isPassedPawn(board, sq, piece.color)) {
+                int rank = static_cast<int>(sq) / 8;
+                int bonus = (piece.color == Color::WHITE) ? (rank - 1) * 20 : (6 - rank) * 20;
+                value += bonus;
             }
             
             score += (piece.color == Color::WHITE ? value : -value);
@@ -1057,9 +1062,7 @@ struct Evaluator {
             Color color = static_cast<Color>(c);
             int kingSq = __builtin_ctzll(board.getBitboard(PieceType::KING, color));
             int kingSafety = evaluateKingSafety(board, color, kingSq);
-            int mobility = evaluateMobility(board, color) / 4;
-            
-            score += (color == Color::WHITE ? kingSafety + mobility : -kingSafety - mobility);
+            score += (color == Color::WHITE ? kingSafety : -kingSafety);
         }
         
         return board.turn() == Color::WHITE ? score : -score;
@@ -1071,6 +1074,8 @@ using Depth = int;
 constexpr Score INFINITY_SCORE = 30000;
 constexpr Depth MAX_KILLER_DEPTH = 30;
 constexpr Depth MAX_QUIESCENCE_PLY = 30;
+constexpr Score FUTILITY_MARGIN = 100;
+constexpr Score RAZORING_MARGIN = 200;
 
 struct SearchStats {
     int64_t nodes = 0;
@@ -1159,30 +1164,74 @@ private:
         return 0;
     }
     
-    int scoreMove(const Move& move, Depth ply, uint64_t hash) const {
-		board.makeMove(move);
-		bool givesCheckmate = board.isCheckmate();
-		board.unmakeMove();
-		if (givesCheckmate) return 300000;
-        const TTEntry* entry = &tt[hash % tt.size()];
-        if (entry->key == hash && entry->move == move) return 200000;
-        
-        int captureScore = mvvLvaScore(move);
-        if (captureScore != 0) return 100000 + captureScore;
-        
-        if (move.promotion != PieceType::NONE) {
-            return 90000 + eval.pieceValues[static_cast<int>(move.promotion)];
-        }
-        
-        if (ply < MAX_KILLER_DEPTH) {
-            if (killers_[ply][0] && *killers_[ply][0] == move) return 50000;
-            if (killers_[ply][1] && *killers_[ply][1] == move) return 40000;
-        }
-        
-        return history_[static_cast<int>(move.from)][static_cast<int>(move.to)];
-    }
+	int scoreMove(const Move& move, Depth ply, uint64_t hash) {
+		Color us = board.turn();
+		Color them = (us == Color::WHITE) ? Color::BLACK : Color::WHITE;
+		
+		const TTEntry* entry = &tt[hash % tt.size()];
+		if (entry->key == hash && entry->move == move) return 200000;
+		
+		int captureScore = mvvLvaScore(move);
+		if (captureScore != 0) return 100000 + captureScore;
+		
+		if (move.promotion != PieceType::NONE) {
+			return 90000 + eval.pieceValues[static_cast<int>(move.promotion)];
+		}
+		
+		bool givesCheck = false;
+		
+		int enemyKingSq = __builtin_ctzll(board.getBitboard(PieceType::KING, them));
+		uint64_t kingMask = 1ULL << enemyKingSq;
+
+		PieceType pt = board.pieceAt(move.from).type;
+		uint64_t occ = board.occupied();
+		
+		switch (pt) {
+			case PieceType::KNIGHT:
+				givesCheck = (Attacks::knightAttacks(move.from) & kingMask) != 0;
+				break;
+			case PieceType::BISHOP:
+				givesCheck = (Attacks::bishopAttacks(move.from, occ) & kingMask) != 0;
+				break;
+			case PieceType::ROOK:
+				givesCheck = (Attacks::rookAttacks(move.from, occ) & kingMask) != 0;
+				break;
+			case PieceType::QUEEN:
+				givesCheck = (Attacks::queenAttacks(move.from, occ) & kingMask) != 0;
+				break;
+			case PieceType::KING:
+				givesCheck = (Attacks::kingAttacks(move.from) & kingMask) != 0;
+				break;
+			case PieceType::PAWN: {
+				int epSq = static_cast<int>(move.to);
+				if (us == Color::WHITE) {
+					if ((epSq + 7 == enemyKingSq && (epSq % 8) > 0) || 
+						(epSq + 9 == enemyKingSq && (epSq % 8) < 7)) {
+						givesCheck = true;
+					}
+				} else {
+					if ((epSq - 7 == enemyKingSq && (epSq % 8) < 7) || 
+						(epSq - 9 == enemyKingSq && (epSq % 8) > 0)) {
+						givesCheck = true;
+					}
+				}
+				break;
+			}
+			default:
+				givesCheck = false;
+		}
+		
+		if (givesCheck) return 250000;
+		
+		if (ply < MAX_KILLER_DEPTH) {
+			if (killers_[ply][0] && *killers_[ply][0] == move) return 50000;
+			if (killers_[ply][1] && *killers_[ply][1] == move) return 40000;
+		}
+		
+		return history_[static_cast<int>(move.from)][static_cast<int>(move.to)];
+	}
     
-    std::vector<Move> orderMoves(const std::vector<Move>& moves, Depth ply, uint64_t hash) const {
+    std::vector<Move> orderMoves(const std::vector<Move>& moves, Depth ply, uint64_t hash) {
 		if (stats.stopSearch.load(std::memory_order_relaxed)) return {};
 		 
         std::vector<std::pair<int, Move>> scored;
@@ -1231,104 +1280,113 @@ private:
         return alpha;
     }
     
-    std::pair<Score, std::optional<Move>> negamax(Depth depth, Score alpha, Score beta, Depth ply) {
-        stats.addNode();
+	std::pair<Score, std::optional<Move>> negamax(Depth depth, Score alpha, Score beta, Depth ply) {
+		stats.addNode();
 		stats.seldepth = std::max(stats.seldepth, ply);
-        
-        if (stats.checkTime()) return {alpha, std::nullopt};
-        
-        if (depth <= 0) return {quiescence(alpha, beta, ply), std::nullopt};
+		
+		if (stats.checkTime()) return {alpha, std::nullopt};
+		
+		if (depth <= 0) return {quiescence(alpha, beta, ply), std::nullopt};
+		
 		bool inCheck = board.isInCheck(board.turn());
 		if (inCheck) depth++;
-        
-        uint64_t hash = board.computeHash();
-        
-        TTEntry* entry = &tt[hash % tt.size()];
-        if (entry->key == hash && entry->depth >= depth) {
-            if (entry->flag == 1) return {entry->score, entry->move};
-            if (entry->flag == 2 && entry->score >= beta) return {beta, entry->move};
-            if (entry->flag == 3 && entry->score <= alpha) return {alpha, entry->move};
-        }
-        
-        if (depth >= 3 && !board.isInCheck(board.turn()) && board.hasNonPawnMaterial(board.turn())) {
-            board.makeNullMove();
-            auto [nullScore, _] = negamax(depth - 3, -beta, -beta + 1, ply + 1);
-            board.unmakeNullMove();
-            if (-nullScore >= beta) return {beta, std::nullopt};
-        }
-        
-        if (board.isCheckmate()) return {-INFINITY_SCORE + ply, std::nullopt};
+		
+		uint64_t hash = board.computeHash();
+		
+		TTEntry* entry = &tt[hash % tt.size()];
+		if (entry->key == hash && entry->depth >= depth) {
+			if (entry->flag == 1) return {entry->score, entry->move};
+			if (entry->flag == 2 && entry->score >= beta) return {beta, entry->move};
+			if (entry->flag == 3 && entry->score <= alpha) return {alpha, entry->move};
+		}
+		
+		if (board.isCheckmate()) return {-INFINITY_SCORE + ply, std::nullopt};
 		if (board.isStalemate() || board.isInsufficientMaterial()) return {0, std::nullopt};
-        
-        Score bestScore = -INFINITY_SCORE;
-        std::optional<Move> bestMove;
-        Score alphaOrig = alpha;
-        
+		
+		Score standPat = eval.evaluate(board);
+		
+		if (depth >= 3 && !inCheck && board.hasNonPawnMaterial(board.turn())) {
+			board.makeNullMove();
+			auto [nullScore, _] = negamax(depth - 3, -beta, -beta + 1, ply + 1);
+			board.unmakeNullMove();
+			if (-nullScore >= beta) return {beta, std::nullopt};
+		}
+		
+		Score bestScore = -INFINITY_SCORE;
+		std::optional<Move> bestMove;
+		Score alphaOrig = alpha;
+		
+		bool canFutilityPrune = (depth == 1 && !inCheck && standPat + FUTILITY_MARGIN < alpha);
+		
 		auto moves = board.generateMoves();
 		if (moves.empty()) {
 			return {board.isInCheck(board.turn()) ? -INFINITY_SCORE + ply : 0, std::nullopt};
 		}
-        
-        auto ordered = orderMoves(moves, ply, hash);
-        int moveCount = 0;
-        
-        for (const auto& move : ordered) {
-            if (stats.stopSearch.load(std::memory_order_relaxed)) break;
-            
-            bool isCapture = board.isCapture(move);
-            bool isPromotion = (move.promotion != PieceType::NONE);
-            
-            Depth reduction = 0;
-            if (depth >= 3 && moveCount >= 3 && !isCapture && !isPromotion && !board.isInCheck(board.turn())) {
-                reduction = 1;
-            }
-            
-            board.makeMove(move);
-            Score score;
-            
-            if (reduction > 0) {
-                auto [reducedScore, _] = negamax(depth - reduction - 1, -beta, -alpha, ply + 1);
-                score = -reducedScore;
-                if (score > alpha) {
-                    auto [fullScore, _] = negamax(depth - 1, -beta, -alpha, ply + 1);
-                    score = -fullScore;
-                }
-            } else {
-                auto [searchScore, _] = negamax(depth - 1, -beta, -alpha, ply + 1);
-                score = -searchScore;
-            }
-            board.unmakeMove();
-            
-            moveCount++;
-            
-            if (score > bestScore) {
-                bestScore = score;
-                bestMove = move;
-            }
-            
-            if (score > alpha) {
-                alpha = score;
-                if (!isCapture && ply < MAX_KILLER_DEPTH) {
-                    if (!killers_[ply][0] || *killers_[ply][0] != move) {
-                        killers_[ply][1] = killers_[ply][0];
-                        killers_[ply][0] = move;
-                    }
-                }
-            }
-            
-            if (alpha >= beta) {
-                if (!isCapture) {
-                    history_[static_cast<int>(move.from)][static_cast<int>(move.to)] += depth * depth;
-                }
-                break;
-            }
-        }
-        
-        uint8_t flag = (bestScore <= alphaOrig) ? 3 : (bestScore >= beta ? 2 : 1);
-        storeTT(hash, bestMove.value_or(Move()), bestScore, depth, flag);
-        
-        return {bestScore, bestMove};
-    }
+		
+		auto ordered = orderMoves(moves, ply, hash);
+		int moveCount = 0;
+		
+		for (const auto& move : ordered) {
+			if (stats.stopSearch.load(std::memory_order_relaxed)) break;
+			
+			bool isCapture = board.isCapture(move);
+			bool isPromotion = (move.promotion != PieceType::NONE);
+			
+			if (canFutilityPrune && !isCapture && !isPromotion) {
+				continue;
+			}
+			
+			Depth reduction = 0;
+			if (depth >= 3 && moveCount >= 3 && !isCapture && !isPromotion && !inCheck) {
+				reduction = 1;
+			}
+			
+			board.makeMove(move);
+			Score score;
+			
+			if (reduction > 0) {
+				auto [reducedScore, _] = negamax(depth - reduction - 1, -beta, -alpha, ply + 1);
+				score = -reducedScore;
+				if (score > alpha) {
+					auto [fullScore, _] = negamax(depth - 1, -beta, -alpha, ply + 1);
+					score = -fullScore;
+				}
+			} else {
+				auto [searchScore, _] = negamax(depth - 1, -beta, -alpha, ply + 1);
+				score = -searchScore;
+			}
+			board.unmakeMove();
+			
+			moveCount++;
+			
+			if (score > bestScore) {
+				bestScore = score;
+				bestMove = move;
+			}
+			
+			if (score > alpha) {
+				alpha = score;
+				if (!isCapture && ply < MAX_KILLER_DEPTH) {
+					if (!killers_[ply][0] || *killers_[ply][0] != move) {
+						killers_[ply][1] = killers_[ply][0];
+						killers_[ply][0] = move;
+					}
+				}
+			}
+			
+			if (alpha >= beta) {
+				if (!isCapture) {
+					history_[static_cast<int>(move.from)][static_cast<int>(move.to)] += depth * depth;
+				}
+				break;
+			}
+		}
+		
+		uint8_t flag = (bestScore <= alphaOrig) ? 3 : (bestScore >= beta ? 2 : 1);
+		storeTT(hash, bestMove.value_or(Move()), bestScore, depth, flag);
+		
+		return {bestScore, bestMove};
+	}
 
 public:
     explicit Searcher(Board& b) : board(b) {
@@ -1433,7 +1491,7 @@ private:
     std::atomic<bool> searchInProgress{false};
     
     void handleUci() {
-        std::cout << "id name Hunyadi 1.1\n";
+        std::cout << "id name Hunyadi 2.0\n";
         std::cout << "id author ThatHungarian\n";
         std::cout << "option name BookFile type string default book.bin\n";
         std::cout << "option name MaxDepth type spin default 20 min 1 max 30\n";
@@ -1447,29 +1505,48 @@ private:
         if (!book.isLoaded()) book.load("book.bin");
     }
     
-    int64_t calculateMoveTime() {
-        Color side = board.turn();
-        int64_t timeLeft = (side == Color::WHITE) ? wtime : btime;
-        int64_t increment = (side == Color::WHITE) ? winc : binc;
-        
-        if (timeLeft <= 0) return 300000;
-        
-        int movesRemaining = movestogo;
-        if (movesRemaining <= 0) {
-            int pieceCount = board.popcount();
-            movesRemaining = (pieceCount > 20) ? 30 : 10;
-        }
-        
-		int64_t baseTime = (timeLeft / std::max(1, movesRemaining)) * 120 / 100;
-        
-        int64_t incBonus = increment * 3 / 4;
-        
-        int64_t maxTime = timeLeft / 1.1;
-        
-        int64_t calculatedTime = std::min(maxTime, baseTime + incBonus);
-        
-        return std::max<int64_t>(100, std::min<int64_t>(calculatedTime, 600000));
-    }
+	int64_t calculateMoveTime() {
+		constexpr int64_t MOVE_OVERHEAD_MS = 30;
+		constexpr int64_t EMERGENCY_BUFFER_MS = 200;
+		constexpr double INC_USAGE_NORMAL = 0.90;
+		
+		Color side = board.turn();
+		int64_t timeLeft = (side == Color::WHITE) ? wtime : btime;
+		int64_t increment = (side == Color::WHITE) ? winc : binc;
+		
+		if (timeLeft <= 0 && increment <= 0) return 30000;
+		timeLeft = std::max<int64_t>(timeLeft, 0);
+		
+		if (movestogo > 0) {
+			int64_t movesRemaining = movestogo;
+			
+			int64_t baseTime = (timeLeft / std::max<int64_t>(1, movesRemaining)) * 110 / 100;
+			
+			int64_t incBonus = increment * 3 / 4;
+			
+			int64_t maxTime = timeLeft / 1.05;
+			
+			int64_t calculatedTime = std::min(maxTime, baseTime + incBonus);
+			
+			return std::max<int64_t>(25, std::min<int64_t>(calculatedTime, 600000));
+		}
+		
+		if (timeLeft < 10000) {
+			double safetyRatio = (timeLeft < 5000) ? 0.70 : 0.85;
+			return std::max<int64_t>(50, (increment * safetyRatio) - MOVE_OVERHEAD_MS);
+		}
+
+		int64_t baseTime = timeLeft / 30;
+		int64_t incTime = increment * INC_USAGE_NORMAL;
+		int64_t moveTime = baseTime + incTime - MOVE_OVERHEAD_MS;
+
+		int pieceCount = board.popcount();
+		int phaseMoves = (pieceCount > 28) ? 40 : (pieceCount > 12 ? 20 : 10);
+		int64_t maxSafe = (timeLeft - EMERGENCY_BUFFER_MS) / phaseMoves;
+		moveTime = std::min(moveTime, maxSafe);
+		
+		return std::max<int64_t>(100, moveTime);
+	}
     
     void handlePosition(std::istringstream& iss) {
         std::string token;
