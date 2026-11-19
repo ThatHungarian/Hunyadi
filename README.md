@@ -1,18 +1,53 @@
-# Hunyadi
-A UCI compliant Chess engine  
+# Hunyadi 4.0
 
-Unstable at Fast time controls
+Hunyadi 4.0 is a UCI-compatible chess engine written in C++17.
 
-Features:  
+## Features
 
-Language & Protocol: C++17, UCI-compliant  
-Board Representation: 64-bit bitboards, FEN support, state stacks  
-Move Generation: Legal moves, captures-only, castling, en passant, promotion  
-Search: Negamax, alpha-beta, iterative deepening, quiescence search, null move pruning, late move reduction, check extension  
-Move Ordering: Transposition table, killer moves, history heuristic, MVV-LVA scoring  
-Evaluation: Material, piece-square tables, passed/doubled/isolated pawns, bishop pair, rook open files, king safety, mobility, center control  
-Time Management: Adaptive allocation with clock/inc support  
-Opening Book: Binary Polyglot-style with weighted moves  
-Game State: Checkmate, stalemate, insufficient material, 50-move clock, repetition detection  
-Hashing: Zobrist-like keys for TT and book  
-Optimizations: Built-in intrinsics, atomic stop flag, depth-priority TT replacement, pin detection  
+- **Bitboard representation** for efficient board and piece handling
+- **Magic bitboards** for fast sliding-piece attack generation
+- **Principal Variation Search (PVS)** with iterative deepening
+- **Lazy SMP** for parallel search
+- **Transposition table** with Zobrist hashing
+- **Move ordering** using transposition-table moves, killer moves, and history heuristics
+- **Quiescence search** for improved tactical stability
+- **Position evaluation** with material, piece-square tables, pawn structure, and positional bonuses
+- **UCI protocol support** for compatibility with chess GUIs
+- **Configurable search options**, including hash size and thread count
+- **Perft testing**, self-tests, and benchmarking commands
+
+Hunyadi communicates through the Universal Chess Interface (UCI) protocol.
+
+Example:
+
+```text
+uci
+isready
+position startpos
+go depth 10
+```
+
+## UCI Options
+
+| Option | Default | Description |
+|---|---:|---|
+| Hash | 64 MB | Transposition table size |
+| Threads | 1 | Number of search threads |
+| Clear Hash | — | Clears the transposition table |
+| Ponder | false | Enables the pondering option |
+| Move Overhead | 20 ms | Time-management overhead |
+
+## Console Commands
+
+| Command | Description |
+|---|---|
+| `perft <depth>` | Counts legal move-tree nodes at a given depth |
+| `selftest` | Runs perft validation on standard positions |
+| `bench [depth]` | Benchmarks search performance |
+| `d` | Prints the current board, FEN, and position key |
+| `eval` | Displays static evaluation |
+| `quit` | Exits the engine |
+
+## License
+
+Hunyadi 4.0 is licensed under the Apache License 2.0.
